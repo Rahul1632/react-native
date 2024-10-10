@@ -8,25 +8,38 @@ import {
   StyleSheet,
 } from "react-native";
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  addFavorite,
-  removeFavorite,
-} from "@/redux/favoriteSlice";
+import { addFavorite, removeFavorite } from "@/redux/favoriteSlice";
 import AntDesign from "@expo/vector-icons/AntDesign";
 import { fetchUsers } from "@/apis/apis";
 
 const UserListScreen = ({ navigation }) => {
-
-
   const dispatch = useDispatch();
   const favorites = useSelector((state) => state.favorites.favoriteUsers);
 
-  const { isLoading, error, data } = useQuery({
+  const {
+    isLoading,
+    error,
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     queryKey: ["users"],
     queryFn: fetchUsers,
+    getNextPageParam: (lastPage, pages) => {
+      return lastPage.hasMore ? pages.length + 1 : undefined;
+    },
   });
+
+  const loadMore = () => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  };
+
+  const users = data?.pages?.flatMap((page) => page.users) || [];
 
   const handleUserPress = (user) => {
     navigation.navigate("UserDetails", { login: user.login });
@@ -63,13 +76,7 @@ const UserListScreen = ({ navigation }) => {
     return (
       <TouchableOpacity onPress={() => handleUserPress(item)}>
         <View style={styles.container}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-            }}
-          >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Image
               source={{ uri: item.avatar_url }}
               style={styles.imageStyle}
@@ -95,9 +102,18 @@ const UserListScreen = ({ navigation }) => {
   return (
     <View>
       <FlatList
-        data={data}
+        data={users}
         renderItem={renderUser}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(item, index) =>
+          item?.id ? `${item.id}-${index}` : `item-${index}`
+        }
+        onEndReached={loadMore}
+        onEndReachedThreshold={1}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <ActivityIndicator size="small" color="#0000ff" />
+          ) : null
+        }
       />
     </View>
   );
@@ -119,4 +135,5 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
 });
+
 export default UserListScreen;
